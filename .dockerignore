@@ -1,0 +1,12 @@
+.git
+.gitignore
+.github
+node_modules
+npm-debug.log
+*.log
+.DS_Store
+.metadata_cache
+.codex
+README.md
+tools
+data/logo_metadata.full.json

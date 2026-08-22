@@ -1,84 +1,101 @@
-# Indian Listed Company Logos
+# Indian Listed Company Logos API
 
-A searchable static directory of NSE and BSE listed company logos, built for GitHub Pages.
-
-Live page target: <https://dharunashokkumar.github.io/indian-listed-company-logos/>
-
-## What Is Included
-
-- `3156` SVG logos split into `nse/` and `bse/`
-- `data/logos.json` for the browser search index
-- `data/logo_metadata.full.json` with full metadata
-- Search by ticker, company name, sector, industry, ISIN, or index name
-- Filter by exchange, sector, and index membership
-- Sort by relevance, market cap, ticker, company, or sector
-- Download one logo or bulk ZIP files as SVG, PNG, or JPG
-- Static API builder for copy-ready logo URLs and embed snippets
-
-## Use As A Static Logo API
-
-GitHub Pages cannot run a dynamic `/logo?ticker=TCS` backend, so the public API is static and cache-friendly.
-
-Direct SVG URL pattern:
+An Express API that serves SVG logos for NSE and BSE listed companies, addressed by ISIN.
 
 ```text
-https://dharunashokkumar.github.io/indian-listed-company-logos/nse/NSE_TCS.svg
-https://dharunashokkumar.github.io/indian-listed-company-logos/bse/BSE_TCS.svg
+https://{domain}/logo/{isin}/icon.svg
 ```
 
-When you know the exchange and ticker, use the direct SVG URL in an app:
-
-```html
-<img
-  src="https://dharunashokkumar.github.io/indian-listed-company-logos/nse/NSE_TCS.svg"
-  alt="TCS logo"
-  loading="lazy"
-/>
-```
-
-When you only know the ticker, fetch the manifest and resolve the logo file:
-
-```js
-const BASE = "https://dharunashokkumar.github.io/indian-listed-company-logos/";
-const ticker = "TCS";
-
-const data = await fetch(`${BASE}data/logos.json`).then((response) => response.json());
-const logo = data.logos.find((item) => item.exchange === "NSE" && item.ticker === ticker);
-const logoUrl = logo ? new URL(logo.file, BASE).href : null;
-```
-
-The homepage form can also generate the direct SVG URL, HTML snippet, and manifest URL for any available ticker.
-
-## Analytics
-
-GitHub repository traffic shows repository-level views and clones, but not page-level downloads.
-
-For page analytics and download counts, create a Google Analytics 4 web stream and put the measurement ID in `analytics.js`:
-
-```js
-const GA_MEASUREMENT_ID = "G-XXXXXXXXXX";
-```
-
-The page sends these GA4 events when configured:
-
-- `logo_download`
-- `bulk_download`
-- `search_results`
-- `format_change`
-
-## Development
-
-Serve locally from the repository root:
+## Run
 
 ```bash
-npm run serve
+npm install
+npm start        # http://localhost:4180
+npm run dev      # same, with --watch
 ```
 
-Rebuild browser data after refreshing metadata:
+Set `PORT` to change the port: `PORT=8080 npm start`.
+
+Opening the root URL in a browser serves an HTML page documenting the API, with live example icons.
+
+## Endpoints
+
+| Route | Returns |
+| --- | --- |
+| `GET /` | HTML usage docs |
+| `GET /logo/{isin}/icon.svg` | The logo as `image/svg+xml`, plus `X-Logo-Ticker` (e.g. `NSE:TCS`) — or `default.svg` with `X-Logo-Fallback` when the ISIN is unknown |
+| `GET /logo/{isin}.json` | Company metadata for that ISIN and the icon URL |
+| `GET /health` | `{ "status": "ok", "logos": 3156, "generatedAt": "..." }` |
+
+## Use it
+
+```html
+<img src="https://your-domain/logo/INE002A01018/icon.svg" alt="Reliance logo" width="32" height="32" loading="lazy" />
+```
+
+```js
+// Always resolves — a company with no logo gets the placeholder, not a 404.
+const iconUrl = (isin) => `https://your-domain/logo/${isin}/icon.svg`;
+
+// Only if you need to tell the real logo from the placeholder:
+const res = await fetch(iconUrl("INE467B01029"));
+const isPlaceholder = res.headers.has("X-Logo-Fallback");
+```
+
+```bash
+curl -O https://your-domain/logo/INE002A01018/icon.svg
+```
+
+## Behaviour
+
+- ISIN is case-insensitive and validated against `^[A-Z]{2}[A-Z0-9]{9}[0-9]$`.
+- **`/icon.svg` always returns an image.** An unknown or malformed ISIN gets `default.svg` with `200` and an `X-Logo-Fallback` header (`logo_not_found` or `invalid_isin`), cached for an hour rather than a day so a newly indexed company shows up quickly. An `<img>` pointed at any ISIN therefore never breaks.
+- `/logo/{isin}.json` reports misses honestly — `400 invalid_isin` or `404 logo_not_found` — so use it when you need to distinguish a real logo from the placeholder.
+- Logo and metadata responses send `Access-Control-Allow-Origin: *` and cache for one day.
+- When an ISIN is listed on both exchanges the NSE logo wins, so a URL always returns the same file.
+- The ISIN index is built once at startup from `data/logos.json`, so restart after rebuilding data.
+
+## Docker
+
+```bash
+docker build -t logo_api .
+docker run -d --name logo_api --init -p 4180:4180 -e PORT=4180 logo_api
+```
+
+The image runs as the non-root `node` user and carries a `HEALTHCHECK` that polls `/health`. Only runtime files are copied in — `tools/` and `data/logo_metadata.full.json` are excluded by `.dockerignore`.
+
+## Deployment
+
+`.github/workflows/deploy.yml` builds the image, pushes it to GHCR, and redeploys over SSH on every push to `main`/`master` that touches the app, the logos, or the Docker files. It also runs on `workflow_dispatch`; tag pushes (`v*`) build and push but do not deploy, so `:latest` always matches the default branch.
+
+Required secrets:
+
+| Secret | Scope | Purpose |
+| --- | --- | --- |
+| `DEPLOY_HOST` | Deploy environment | SSH host |
+| `DEPLOY_USER` | Deploy environment | SSH user |
+| `DEPLOY_SSH_PASSWORD` | Deploy environment | SSH password (swap the step to `key:` for key-only hosts) |
+| `DEPLOY_SSH_PORT` | Deploy environment | Optional, defaults to `22` |
+| `PORT` | Deploy environment | Optional, defaults to `4180` |
+
+`GITHUB_TOKEN` handles GHCR auth, so no registry secret is needed. The deploy step pulls `:latest`, replaces the container, prunes superseded images, then polls `/health` for up to 60s — if the container does not come up the job prints the last 50 log lines and fails. An optional `/opt/logo_api/.env` on the server is passed through with `--env-file`.
+
+## Contents
+
+- `server/` — the Express app (`index.mjs`) and the landing page (`home.html`)
+- `Dockerfile`, `.dockerignore` — container build
+- `.github/workflows/deploy.yml` — build, push to GHCR, deploy over SSH
+- `nse/`, `bse/` — 3156 SVG logos
+- `default.svg` — placeholder served when an ISIN has no logo
+- `data/logos.json` — the lookup index, generated from `data/logo_metadata.full.json`
+- `tools/` — data build, validation, and scraping scripts
+
+## Refresh the data
 
 ```bash
 ./tools/scrape_logo_metadata.py --refresh
 npm run build:data
+npm run validate
 ```
 
 ## Data Source

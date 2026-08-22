@@ -1,0 +1,139 @@
+name: Build, push, and deploy logo_api
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+    paths:
+      - "server/**"
+      - "data/logos.json"
+      - "nse/**"
+      - "bse/**"
+      - "favicon.svg"
+      - "default.svg"
+      - "package.json"
+      - "package-lock.json"
+      - "Dockerfile"
+      - ".dockerignore"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  CONTAINER_NAME: logo_api
+  APP_DIR: /opt/logo_api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: Deploy
+    # Only deploy from main/master so `ghcr.io/...:latest` matches what we just pushed.
+    if: |
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    env:
+      DEPLOY_IMAGE: ghcr.io/${{ github.repository }}:latest
+    steps:
+      # If deploy fails with "dial tcp ...: i/o timeout", the runner cannot reach your host:port over TCP.
+      # Fix on the server side: public DNS/IP (not RFC1918), security group/firewall allows SSH from the internet
+      # (or from GitHub Actions IP ranges: https://api.github.com/meta → "actions"), sshd listening, correct port.
+      # Private VPC-only hosts need a bastion (use proxy_* inputs), Tailscale on a relay, or a self-hosted runner in the VPC.
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_USER: ${{ github.actor }}
+          DEPLOY_IMAGE: ${{ env.DEPLOY_IMAGE }}
+          # This service needs no database or secrets; PORT is the only knob.
+          APP_PORT: ${{ secrets.PORT }}
+          CONTAINER_NAME: ${{ env.CONTAINER_NAME }}
+          APP_DIR: ${{ env.APP_DIR }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_SSH_PORT != '' && secrets.DEPLOY_SSH_PORT || '22' }}
+          username: ${{ secrets.DEPLOY_USER }}
+          # Prefer password auth; for key-only hosts use `key` instead of `password` (repo secrets).
+          password: ${{ secrets.DEPLOY_SSH_PASSWORD }}
+          timeout: 2m
+          command_timeout: 15m
+          envs: GH_TOKEN,GH_USER,DEPLOY_IMAGE,APP_PORT,CONTAINER_NAME,APP_DIR
+          script_stop: true
+          script: |
+            set -euo pipefail
+            APP_PORT="${APP_PORT:-4180}"
+            echo "$GH_TOKEN" | docker login ghcr.io -u "$GH_USER" --password-stdin
+            docker pull "$DEPLOY_IMAGE"
+            docker stop "$CONTAINER_NAME" 2>/dev/null || true
+            docker rm "$CONTAINER_NAME" 2>/dev/null || true
+            ENV_FLAG=""
+            if [ -f "${APP_DIR}/.env" ]; then
+              ENV_FLAG="--env-file ${APP_DIR}/.env"
+            fi
+            docker run -d --name "$CONTAINER_NAME" --restart unless-stopped --init \
+              -p "${APP_PORT}:${APP_PORT}" \
+              $ENV_FLAG \
+              -e "PORT=${APP_PORT}" \
+              -e "NODE_ENV=production" \
+              "$DEPLOY_IMAGE"
+
+            # The image bundles ~3000 SVGs, so drop the superseded layers instead of filling the disk.
+            docker image prune -f
+
+            # Fail the deploy loudly if the new container is not answering.
+            for i in $(seq 1 20); do
+              if curl -fsS "http://127.0.0.1:${APP_PORT}/health" > /dev/null; then
+                echo "logo_api healthy on port ${APP_PORT}"
+                exit 0
+              fi
+              sleep 3
+            done
+            echo "logo_api did not become healthy within 60s"
+            docker logs --tail 50 "$CONTAINER_NAME"
+            exit 1

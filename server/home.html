@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Indian Listed Company Logos API</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f5f0;
+    --panel: #ffffff;
+    --ink: #171512;
+    --muted: #6b6559;
+    --line: #e2ddd2;
+    --accent: #b8452f;
+    --code-bg: #f1eee6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131211;
+      --panel: #1c1b19;
+      --ink: #f2eee5;
+      --muted: #9a9287;
+      --line: #2e2c28;
+      --accent: #e8a08c;
+      --code-bg: #232120;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 56px 24px 80px; }
+  header { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 40px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); margin: 0 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 20px; margin: 44px 0 14px; letter-spacing: -0.01em; }
+  p { margin: 0 0 14px; }
+  .lede { color: var(--muted); font-size: 18px; margin: 0; }
+  .stats { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 20px; font-size: 14px; color: var(--muted); }
+  .stats b { display: block; font-size: 22px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em; }
+  :not(pre) > code { background: var(--code-bg); padding: 2px 6px; border-radius: 5px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 16px;
+  }
+  .url {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--accent);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: clamp(14px, 2.4vw, 18px);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .url .var { color: var(--accent); }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; margin-bottom: 16px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+  td code { white-space: nowrap; }
+  .demo { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .demo a {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px; text-decoration: none; color: inherit;
+  }
+  .demo a:hover { border-color: var(--accent); }
+  .demo img { width: 28px; height: 28px; flex: none; border-radius: 5px; }
+  .demo span { font-size: 13px; font-weight: 600; }
+  .demo small { display: block; font-weight: 400; color: var(--muted); font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+  footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Indian Listed Company Logos API</h1>
+    <p class="lede">SVG logos for NSE and BSE listed companies, addressed by ISIN.</p>
+    <div class="stats">
+      <div>Logos<b>__COUNT__</b></div>
+      <div>Format<b>SVG</b></div>
+      <div>Data updated<b>__GENERATED__</b></div>
+    </div>
+  </header>
+
+  <h2>Load an icon</h2>
+  <p>One GET request, no key, no rate limit. Replace <code>{isin}</code> with the company's ISIN:</p>
+  <div class="url">__BASE__/logo/<span class="var">{isin}</span>/icon.svg</div>
+
+  <h2>Try it</h2>
+  <p>These are live requests to this server:</p>
+  <div class="demo">__DEMO__</div>
+
+  <h2>Use it in a page</h2>
+  <pre><code>&lt;img src="__BASE__/logo/INE002A01018/icon.svg"
+     alt="Reliance Industries logo" width="32" height="32" loading="lazy" /&gt;</code></pre>
+
+  <p>In CSS:</p>
+  <pre><code>.logo { background-image: url("__BASE__/logo/INE002A01018/icon.svg"); }</code></pre>
+
+  <p>From JavaScript — the icon URL always resolves, so no error handling is needed:</p>
+  <pre><code>const iconUrl = (isin) =&gt; `__BASE__/logo/${isin}/icon.svg`;
+
+// Only if you need to know whether it is the real logo or the placeholder:
+const res = await fetch(iconUrl("INE002A01018"));
+const isPlaceholder = res.headers.has("X-Logo-Fallback");</code></pre>
+
+  <p>From the shell:</p>
+  <pre><code>curl -O __BASE__/logo/INE002A01018/icon.svg</code></pre>
+
+  <h2>Endpoints</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Route</th><th>Response</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>GET /logo/{isin}/icon.svg</code></td>
+        <td>The logo as <code>image/svg+xml</code>. Sends <code>X-Logo-Ticker</code> (e.g. <code>NSE:TCS</code>) so you can see which listing answered, or <code>X-Logo-Fallback</code> when the placeholder was served.</td>
+      </tr>
+      <tr>
+        <td><code>GET /logo/{isin}.json</code></td>
+        <td>Company metadata for that ISIN — ticker, name, sector, industry, market cap, index membership — plus the icon URL.</td>
+      </tr>
+      <tr>
+        <td><code>GET /health</code></td>
+        <td><code>{ "status": "ok", "logos": __COUNT__ }</code></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Rules and errors</h2>
+  <p>ISIN is case-insensitive and must match <code>^[A-Z]{2}[A-Z0-9]{9}[0-9]$</code>. Every response allows cross-origin use (<code>Access-Control-Allow-Origin: *</code>) and is cacheable for a day.</p>
+  <p><b>The icon route always returns an image.</b> When a company is not in the index you get a neutral placeholder with <code>200</code> and an <code>X-Logo-Fallback</code> header, so an <code>&lt;img&gt;</code> never breaks. Ask <code>/logo/{isin}.json</code> when you need to know whether a real logo exists.</p>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Status</th><th>Body</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>200</code></td><td>SVG</td><td>Logo found.</td></tr>
+      <tr><td><code>200</code> + <code>X-Logo-Fallback</code></td><td>Placeholder SVG</td><td><code>/icon.svg</code> only — unknown or malformed ISIN.</td></tr>
+      <tr><td><code>400</code></td><td><code>{"error":"invalid_isin"}</code></td><td><code>.json</code> only — not a well-formed ISIN.</td></tr>
+      <tr><td><code>404</code></td><td><code>{"error":"logo_not_found"}</code></td><td><code>.json</code> only — valid ISIN, not in this index.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>When one ISIN is listed on both exchanges, the NSE logo is served, so a given URL always returns the same file.</p>
+
+  <footer>
+    Company logos and trademarks belong to their respective owners. This service indexes them for discovery and convenience — check each company's brand usage rules before production use.
+  </footer>
+</main>
+</body>
+</html>
